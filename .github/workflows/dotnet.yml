@@ -1,43 +1,45 @@
-name: Java
+name: CI
 
 on:
   push:
-  workflow_dispatch:
-
+    branches:
+    - main
+  pull_request:
+    branches:
+    - main
+    
 jobs:
-  build:
+  build_and_test:
+
+    env:
+      BUILD_CONFIG: 'Release'
+      SOLUTION: 'Solution1/UnitTest.sln'
 
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+    - uses: actions/checkout@v2
 
-      - name: Set up Java
-        uses: actions/setup-java@v3
-        with:
-          distribution: 'temurin'
-          java-version: '11'
-
-      - name: Build with Maven
-        run: mvn -B package --file pom.xml
-
-      - name: Run Maven tests
-        run: mvn test
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: 6.x
 
 
-      - name: Archive test results
-        if: always() # Ensure this step always runs, even if there are no test results
-        uses: actions/upload-artifact@v2
-        with:
-          name: test-results
-          path: '**/target/surefire-reports/*.xml'
+    - name: Restore dependencies
+      run: dotnet restore $SOLUTION
 
-      # - name: Report
-      #   uses: dorny/test-reporter@v1
-      #   if: always()
-      #   with:
-      #     name: Maven Tests
-      #     path: target/surefire-reports/*.xml
-      #     reporter: java-junit
-      #     fail-on-error: true
+    - name: Build
+      run: dotnet build $SOLUTION --configuration $BUILD_CONFIG
+      
+    - name: Test
+      run: dotnet test $SOLUTION --configuration $BUILD_CONFIG --logger "trx;LogFileName=test-results.trx" || true
+      
+    - name: Test Report
+      uses: dorny/test-reporter@v1
+      if: always()
+      with:
+        name: DotNET Tests
+        path: "**/test-results.trx"                            
+        reporter: dotnet-trx
+        fail-on-error: true
